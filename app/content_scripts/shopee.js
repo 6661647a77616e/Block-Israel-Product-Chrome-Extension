@@ -115,16 +115,22 @@ function debounce(fn, delay) {
 }
 
 // ✅ Store and log boycott count persistently
+// ✅ Store and notify popup about boycott count
 function updateBoycottCount(newCount) {
   if (newCount === 0) return; // avoid updating when no new items found
 
   chrome.storage.local.get(["boycottCount"], (data) => {
     const current = data.boycottCount || 0;
     const updated = current + newCount;
+
     chrome.storage.local.set({ boycottCount: updated }, () => {
       console.log(`🛑 Total boycotted products so far: ${updated}`);
+
+      // 🔔 Notify popup (if open)
+      chrome.runtime.sendMessage({ type: "UPDATE_BOYCOTT_COUNT", count: updated });
     });
   });
 }
+
 
 main();
