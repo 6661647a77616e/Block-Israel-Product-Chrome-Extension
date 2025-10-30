@@ -7,7 +7,9 @@ async function main() {
   const processed = new WeakSet();
 
   const observer = new MutationObserver(() => {
-    filterItems(boycottedBrands, processed);
+    const count1 = filterItems(boycottedBrands, processed);
+    const count2 = filterHomePageRecommendation(boycottedBrands);
+    updateBoycottCount(count1 + count2);
   });
 
   const container = document.querySelector("ul.shopee-search-item-result__items");
@@ -16,12 +18,19 @@ async function main() {
   }
 
   // Initial filter
-  filterItems(boycottedBrands, processed);
+  const count1 = filterItems(boycottedBrands, processed);
+  const count2 = filterHomePageRecommendation(boycottedBrands);
+  updateBoycottCount(count1 + count2);
 
   // Fallback: extra safety on scroll
-  window.addEventListener("scroll", debounce(() => {
-    filterItems(boycottedBrands, processed);
-  }, 300));
+  window.addEventListener(
+    "scroll",
+    debounce(() => {
+      const c1 = filterItems(boycottedBrands, processed);
+      const c2 = filterHomePageRecommendation(boycottedBrands);
+      updateBoycottCount(c1 + c2);
+    }, 300)
+  );
 }
 
 async function fetchBoycottList() {
@@ -41,6 +50,7 @@ async function fetchBoycottList() {
 }
 
 function filterItems(boycottedBrands, processed) {
+  let count = 0;
   const regex = new RegExp(boycottedBrands.join("|"), "i");
   const items = document.querySelectorAll("ul .shopee-search-item-result__item");
 
@@ -53,10 +63,32 @@ function filterItems(boycottedBrands, processed) {
     const name = itemEl.textContent.toLowerCase();
     if (regex.test(name)) {
       li.classList.add("boycott-hidden");
+      count++;
     }
 
     processed.add(li);
   });
+
+  return count;
+}
+
+function filterHomePageRecommendation(boycottedBrands) {
+  let count = 0;
+  const itemDivs = Array.from(document.querySelectorAll(".oMSmr0"));
+  itemDivs.forEach((itemDiv) => {
+    const itemEl = itemDiv.querySelector("div .line-clamp-2");
+    if (!itemEl) return;
+
+    const itemName = itemEl.textContent.toLowerCase().trim();
+    const matched = boycottedBrands.some((brand) => itemName.includes(brand));
+    if (matched) {
+      itemDiv.style.pointerEvents = "none";
+      itemDiv.style.opacity = "0.05";
+      count++;
+    }
+  });
+
+  return count;
 }
 
 function injectHideStyle() {
@@ -80,6 +112,19 @@ function debounce(fn, delay) {
     clearTimeout(timeout);
     timeout = setTimeout(() => fn(...args), delay);
   };
+}
+
+// ✅ Store and log boycott count persistently
+function updateBoycottCount(newCount) {
+  if (newCount === 0) return; // avoid updating when no new items found
+
+  chrome.storage.local.get(["boycottCount"], (data) => {
+    const current = data.boycottCount || 0;
+    const updated = current + newCount;
+    chrome.storage.local.set({ boycottCount: updated }, () => {
+      console.log(`🛑 Total boycotted products so far: ${updated}`);
+    });
+  });
 }
 
 main();
